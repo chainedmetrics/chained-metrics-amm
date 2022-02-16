@@ -1,4 +1,5 @@
 from brownie import *
+from decimal import Decimal
 
 def setup():
 
@@ -11,13 +12,13 @@ def setup():
     )
 
     longToken = Contract.from_abi('LongToken', amm.longTokenAddress(), ScalarToken.abi)
-    shortToken = Contract.from_abi('ShortToken', amm.longTokenAddress(), ScalarToken.abi)
+    shortToken = Contract.from_abi('ShortToken', amm.shortTokenAddress(), ScalarToken.abi)
 
     return (a, amm, usdc, longToken, shortToken)
 
 def calculate_token_returned(k, fundingToken):
 
-    return int(k / fundingToken)
+    return int(Decimal(k) / Decimal(fundingToken))
 
 def calculate_target_funding_amount(target, fundingToken):
 
