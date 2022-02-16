@@ -71,19 +71,38 @@ def test_buy_amm():
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
 
-# def test_70_target():
-#     a, amm, usdc, long, short = setup()
+def test_70_target():
+    a, amm, usdc, long, short = setup()
 
-#     usdc.approve(amm.address, 100*10**18, {'from': a})
-#     amm.fund(10*10**18, 7*10**7, {'from': a})
+    usdc.approve(amm.address, 100*10**18, {'from': a})
+    amm.fund(10**19, 7*10**7, {'from': a})
     
-#     funding_amount = short.balanceOf(a) + 10**19
+    funding_amount = short.balanceOf(amm) + int(10**19*.98)
 
-#     amm.buy(10**19, True, 1)
+    amm.buy(10**19, True, 1)
 
-#     expectedAmmount = calculate_token_returned(amm.k(), funding_amount)
+    expectedAmmount = calculate_token_returned(amm.k(), funding_amount)
+    balancingAmount = short.balanceOf(a.address) + int(10**19*.98)
 
-#     assert long.balanceOf(amm.address) == expectedAmmount
+    print(f'k: {amm.k(): >30}')
+    print(f'fundingAmount: {funding_amount: >30}')
+    print(f'targetBalance: {expectedAmmount: >30}')
+    print(f'balancing amount: {balancingAmount: >30}')
+
+    assert long.balanceOf(amm.address) == expectedAmmount
+
+def test_funding_token_is_collateralized():
+    a, amm, usdc, long, short = setup()
+
+    usdc.approve(amm.address, 100*10**18, {'from': a})
+    amm.fund(10**19, 7*10**7, {'from': a})
+    
+    assert short.balanceOf(amm.address) == 10**19
+    funding_amount = short.balanceOf(amm) + int(10**19*.98)
+
+    amm.buy(10**19, True, 1)
+
+    assert short.balanceOf(amm.address) == funding_amount
 
     
 
