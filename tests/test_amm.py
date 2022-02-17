@@ -1,9 +1,9 @@
-from unittest import expectedFailure
 import pytest
 
 from brownie import *
+from unittest import expectedFailure
 from packages.chainedmetrics import setup, calculate_token_returned
-import logging
+from decimal import Decimal
 
 
 def test_amm_fund_10_at_50():
@@ -90,6 +90,43 @@ def test_70_target():
     print(f'balancing amount: {balancingAmount: >30}')
 
     assert long.balanceOf(amm.address) == expectedAmmount
+
+def test_many_orders():
+    a, amm, usdc, long, short = setup()
+
+    usdc.approve(amm.address, 100*10**18, {'from': a})
+    amm.fund(10**19, 7*10**7, {'from': a})
+    multiple = 3.141592653
+    for _ in range(20):
+        print(_)
+        funding_amount = Decimal(short.balanceOf(amm)) + int(Decimal(multiple * 10 ** 18 / 100)) * 98
+        print(f"investmentAmount:          {int(int(Decimal(multiple)*10 ** 18))}")
+        print(f"investmentAmountMinusFee:  {int(Decimal(multiple * 10 ** 18) * Decimal(.98))}")
+        print(f"k:                         {amm.k()}")
+        print(f"fundingToken.balanceOfThis {funding_amount}")
+        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1)
+
+        
+        expectedAmmount = calculate_token_returned(Decimal(amm.k()), Decimal(funding_amount))
+        assert long.balanceOf(amm.address) == expectedAmmount
+        amm.buy(4**18, False, 1)
+        amm.buy(2**18, False, 1)
+
+def test_many_large_orders():
+    a, amm, usdc, long, short = setup(10000000)
+
+    usdc.approve(amm.address, 100000000*10**18, {'from': a})
+    amm.fund(10**19, 7*10**7, {'from': a})
+    multiple = 219082.141592653
+    for _ in range(20):
+        funding_amount = Decimal(short.balanceOf(amm)) + int(Decimal(multiple * 10 ** 18 / 100)) * 98
+        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1)
+
+        
+        expectedAmmount = calculate_token_returned(Decimal(amm.k()), Decimal(funding_amount))
+        assert long.balanceOf(amm.address) == expectedAmmount
+        amm.buy(4**18, False, 1)
+        amm.buy(2**18, False, 1)
 
 def test_funding_token_is_collateralized():
     a, amm, usdc, long, short = setup()

@@ -1,11 +1,11 @@
 from brownie import *
 from decimal import Decimal
 
-def setup():
+def setup(usdc_amount=100):
 
     a = accounts.add()
     usdc = ScalarToken.deploy('USDC', 'USDC', {'from': a})
-    usdc.issueTokens(a.address, 100*10**18, {'from': a.address})
+    usdc.issueTokens(a.address, usdc_amount*10**18, {'from': a.address})
 
     amm = FixedProductMarketMaker.deploy(
         'NFLX Subs LP Pool', 'NFLX/SUBS/LP', usdc.address, 'NFLX Subs', 'NFLX/SUBS', {'from': a.address}
@@ -18,7 +18,7 @@ def setup():
 
 def calculate_token_returned(k, fundingToken):
 
-    return int(Decimal(k) / Decimal(fundingToken))
+    return int(Decimal(int(Decimal(k))) / Decimal(fundingToken))
 
 def calculate_target_funding_amount(target, fundingToken):
 

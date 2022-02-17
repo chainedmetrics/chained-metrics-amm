@@ -147,6 +147,11 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         uint targetBalancingQuantity = k.div(fundingToken.balanceOf(address(this)));
         uint balancingQuantityReturned = balancingToken.balanceOf(address(this)).sub(targetBalancingQuantity);
 
+        console.log("investmentAmount:              %s", investmentAmount);
+        console.log("investmentAmountMinusFees:     %s", investmentAmountMinusFees);
+        console.log("k                              %s", k);
+        console.log("fundingToken.balanceOf(this)   %s", fundingToken.balanceOf(address(this)));
+        console.log("targetAmount                   %s", targetBalancingQuantity);
         balancingToken.transfer(msgSender(), balancingQuantityReturned);
     }
 
