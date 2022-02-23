@@ -9,7 +9,7 @@ import {EIP712MetaTransaction} from "./EIP712MetaTransaction.sol";
 import {Math} from "./Math.sol";
 
 // For debugging import hardhat for debugging with console.log("Msg");
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 
 contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMarketMaker', "1") {
@@ -20,7 +20,6 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
     ScalarToken public longToken;
     ScalarToken public shortToken;
 
-    uint public k;
     uint public constant FEE = 2*10**16;
     mapping (address => uint) public earnedFees;
     address[] public stakers;
@@ -94,15 +93,6 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         balancingToken.issueTokens(address(this), balancingAmount);
         balancingToken.issueTokens(msgSender(), returnBalancingAmount);
 
-        console.log("targetLongPrice:      %s", targetLongPrice);
-        console.log("fundingAmount         %s", fundingAmount);
-        console.log("balancingAmt           %s", balancingAmount);
-        console.log("returnBalancingAmount %s", returnBalancingAmount);
-        console.log("sender Balance         %s", balancingToken.balanceOf(msgSender()));
-        console.log("amm Balance            %s", balancingToken.balanceOf(address(this)));
-
-        k = balancingToken.balanceOf(address(this)).mul(fundingToken.balanceOf(address(this)));
-
         _mint(msgSender(), fundingAmount);
     
     }
@@ -123,6 +113,10 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         return address(shortToken);
     }
 
+    function K() public view returns (uint){
+        return longToken.balanceOf(address(this)).mul(shortToken.balanceOf(address(this)));
+    }
+
     function buy (uint investmentAmount, bool long, uint minOutcomeTokensToBuy) external {
 
         uint feeAmount = investmentAmount.mul(FEE).div(ONE);
@@ -138,25 +132,24 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
             balancingToken = shortToken;
         }
 
-        // fully collateralize the tokens
+        // collateralize the investments, mint the tokens and add in the fees
+        uint k = K();
         collateralToken.transferFrom(msgSender(), address(this), investmentAmount);
         fundingToken.issueTokens(address(this), investmentAmountMinusFees);
         balancingToken.issueTokens(address(this), investmentAmountMinusFees);
         feePool = feePool.add(feeAmount);
 
+        // calculate the target balancing quantity
         uint targetBalancingQuantity = k.div(fundingToken.balanceOf(address(this)));
-        uint balancingQuantityReturned = balancingToken.balanceOf(address(this)).sub(targetBalancingQuantity);
+        uint balancingQuantityReturned = balancingToken.balanceOf(address(this)).sub(targetBalancingQuantity).sub(1);
 
-        console.log("investmentAmount:              %s", investmentAmount);
-        console.log("investmentAmountMinusFees:     %s", investmentAmountMinusFees);
-        console.log("k                              %s", k);
-        console.log("fundingToken.balanceOf(this)   %s", fundingToken.balanceOf(address(this)));
-        console.log("targetAmount                   %s", targetBalancingQuantity);
         balancingToken.transfer(msgSender(), balancingQuantityReturned);
     }
 
     function sell (uint sellAmount, bool long, uint minimumReturnAmount) external{
        
+       uint k = K();
+       require(longToken.balanceOf(address(this)) * shortToken.balanceOf(address(this)) == k, 'invarint not satisfied');
         if (long){
             longToken.transferFrom(msgSender(), address(this), sellAmount);
         }
@@ -164,8 +157,10 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
             shortToken.transferFrom(msgSender(), address(this), sellAmount);
         }
 
+        require(sellAmount > 0, 'Sell amount must be greater than 0');
         uint startingLongBalance = longToken.balanceOf(address(this));
         uint startingShortBalance = shortToken.balanceOf(address(this));
+        require(startingLongBalance * startingShortBalance > k, 'invarint not satisfied');
 
         uint a = 1;
         uint b = startingLongBalance.add(startingShortBalance);
@@ -175,7 +170,6 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
 
         require(startingLongBalance > burnAmount, 'Cannot burn more LONG tokens than existing balance');
         require(startingShortBalance > burnAmount, 'Cannot burn more SHORT tokens than existing balance');
-        require(startingLongBalance.sub(burnAmount).mul(startingShortBalance.sub(burnAmount)) == k, 'Invariant formula failed');
         
         longToken.burnTokens(address(this), burnAmount);
         shortToken.burnTokens(address(this), burnAmount);
@@ -218,7 +212,7 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         }
     }
     
-    function solveQuadraticEquation(uint a, uint b, uint c) public view returns(uint x){
+    function solveQuadraticEquation(uint a, uint b, uint c) public returns(uint x){
         // Solving the formula: ax**2 + bx + c = 0
         // Using the quadradic formula: x = [- b + sqrt(b**2 – 4ac)]/2a 
         // k = (Long - x) * (Short - x)
