@@ -28,6 +28,15 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
     uint constant FIFTY_FIFTY = 5*10**7;
     uint public feePool = 0;
 
+    // Variables used for managing the payout
+    uint public high;
+    uint public low;
+    uint public outcome;
+    bool public outcomeSet = false;
+
+    // Creator is used for determining the address that can set the outcome value
+    address public creator;
+
     // Used for quadratic equation and need to be cast to uints
     uint constant UINT_2 = 2;
     uint constant UINT_4 = 4;
@@ -35,7 +44,7 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
     event Deposit(string msg); 
 
     constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
-        string memory kpiName, string memory kpiSymbol) ERC20(tokenName,  tokenSymbol) public {
+        string memory kpiName, string memory kpiSymbol, uint _high, uint _low) ERC20(tokenName,  tokenSymbol) public {
 
         collateralToken = this;
         string memory longName = string(abi.encodePacked(kpiName, " LONG"));
@@ -45,9 +54,65 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
 
         longToken = new ScalarToken(longName, longSymbol);
         shortToken = new ScalarToken(shortName, shortSymbol);
-
         collateralToken = ERC20(collateralTokenAddress);
 
+        require(_high > _low, "high must be greater than low");
+        high = _high;
+        low = _low;
+        creator = msgSender();
+    }
+
+    function set_outcome(uint _outcome) public {
+        // Called by the creator to set the outcome of the market
+        require(msgSender() == creator);
+        if (_outcome <= low){
+            outcome = low;
+        } else if (_outcome >= high){
+            outcome = high;
+        } else {
+            outcome = _outcome;
+        }
+
+        outcomeSet = true;
+    }
+
+    function execute_payout() public {
+        // Called by the holder of a token to execute their payout
+        require(outcomeSet,  "Outcome has not been set");
+
+        uint longBalance = longToken.balanceOf(msgSender());
+        uint shortBalance = shortToken.balanceOf(msgSender());
+
+        if (longBalance > 0){
+            uint longPayout = calculate_long_payout(longBalance);
+            console.log(longPayout);
+            collateralToken.transfer(msgSender(), longPayout);
+            longToken.burnTokens(msgSender(), longBalance);
+        }
+
+        if (shortBalance > 0){
+            uint shortPayout = calculate_short_payout(shortBalance);
+            collateralToken.transfer(msgSender(), shortPayout);
+            shortToken.burnTokens(msgSender(), shortBalance);
+        }
+    }
+
+    function calculate_long_payout(uint longBalance) internal returns (uint longPayout) {
+        // Calculates long payout using 8 decimals for the short token value
+        uint longTokenValue = outcome.sub(low).mul(10**8).div(high.sub(low));
+        uint longPayout = longBalance.mul(longTokenValue).div(10**8);
+        
+        console.log("Long Token Value: %s", longTokenValue);
+        console.log("Long Payout:      %s", longPayout);
+        return longPayout;
+    }
+
+    function calculate_short_payout(uint shortBalance) internal returns (uint shortPayout) {
+        // Calculates short payout using 8 decimals for the short token value
+        uint shortTokenValue = high.sub(outcome).mul(10**8).div(high.sub(low));
+        uint shortPayout = shortBalance.mul(shortTokenValue).div(10**8);
+
+        return shortPayout;
     }
 
     function fund(uint fundingAmount, uint targetLongPrice) public{
