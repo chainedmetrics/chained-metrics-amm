@@ -5,6 +5,7 @@ pragma solidity ^0.6.6;
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ScalarToken} from "./ScalarToken.sol";
 import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
+import  "@openzeppelin/contracts/access/AccessControl.sol";
 import {EIP712MetaTransaction} from "./EIP712MetaTransaction.sol";
 import {Math} from "./Math.sol";
 
@@ -12,10 +13,14 @@ import {Math} from "./Math.sol";
 // import "hardhat/console.sol";
 
 
-contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMarketMaker', "1") {
+contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction('FixedProductMarketMaker', "1") {
     using SafeMath for uint;
     using SafeMath for int;
 
+    // REPORTING_ROLE allows an address to report on the outcome of a market
+    bytes32 public constant REPORTING_ROLE = keccak256("REPORTING_ROLE");
+    
+    // Tokens used for collateral and long/short pair for the market
     ERC20 public collateralToken;
     ScalarToken public longToken;
     ScalarToken public shortToken;
@@ -23,9 +28,7 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
     uint public constant FEE = 2*10**16;
     mapping (address => uint) public earnedFees;
     address[] public stakers;
-    uint constant ONE = 10**18;
-    uint constant TARGET_PRICE_DIGITS = 10**8;
-    uint constant FIFTY_FIFTY = 5*10**7;
+
     uint public feePool = 0;
 
     // Variables used for managing the payout
@@ -34,17 +37,17 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
     uint public outcome;
     bool public outcomeSet = false;
 
-    // Creator is used for determining the address that can set the outcome value
-    address public creator;
-
-    // Used for quadratic equation and need to be cast to uints
+    // Constants used in various calculations
+    uint constant ONE = 10**18;
+    uint constant TARGET_PRICE_DIGITS = 10**8; // Payouts and initial AMM price go to 8 digits
+    uint constant FIFTY_FIFTY = 5*10**7; // 50/50 if using 8 digits of precision
     uint constant UINT_2 = 2;
     uint constant UINT_4 = 4;
     
     event Deposit(string msg); 
 
     constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
-        string memory kpiName, string memory kpiSymbol, uint _high, uint _low) ERC20(tokenName,  tokenSymbol) public {
+        string memory kpiName, string memory kpiSymbol, uint _high, uint _low, address reportingAddress) ERC20(tokenName,  tokenSymbol) public {
 
         collateralToken = this;
         string memory longName = string(abi.encodePacked(kpiName, " LONG"));
@@ -59,12 +62,14 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         require(_high > _low, "high must be greater than low");
         high = _high;
         low = _low;
-        creator = msgSender();
+
+        _setupRole(REPORTING_ROLE, reportingAddress);
     }
 
     function set_outcome(uint _outcome) public {
         // Called by the creator to set the outcome of the market
-        require(msgSender() == creator);
+        require(hasRole(REPORTING_ROLE, msgSender()), "Address does not have REPORTING_ROLE");
+        
         if (_outcome <= low){
             outcome = low;
         } else if (_outcome >= high){
@@ -98,16 +103,16 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
 
     function calculate_long_payout(uint longBalance) internal returns (uint longPayout) {
         // Calculates long payout using 8 decimals for the short token value
-        uint longTokenValue = outcome.sub(low).mul(10**8).div(high.sub(low));
-        uint longPayout = longBalance.mul(longTokenValue).div(10**8);
+        uint longTokenValue = outcome.sub(low).mul(TARGET_PRICE_DIGITS).div(high.sub(low));
+        uint longPayout = longBalance.mul(longTokenValue).div(TARGET_PRICE_DIGITS);
         
         return longPayout;
     }
 
     function calculate_short_payout(uint shortBalance) internal returns (uint shortPayout) {
         // Calculates short payout using 8 decimals for the short token value
-        uint shortTokenValue = high.sub(outcome).mul(10**8).div(high.sub(low));
-        uint shortPayout = shortBalance.mul(shortTokenValue).div(10**8);
+        uint shortTokenValue = high.sub(outcome).mul(TARGET_PRICE_DIGITS).div(high.sub(low));
+        uint shortPayout = shortBalance.mul(shortTokenValue).div(TARGET_PRICE_DIGITS);
 
         return shortPayout;
     }
