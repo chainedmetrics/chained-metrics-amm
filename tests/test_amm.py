@@ -199,3 +199,151 @@ def test_many_buys_and_sells():
     assert int(short.balanceOf(amm.address)/100) == int(startingShort / 100)
     assert int(long.balanceOf(amm.address)/100) == int(startingLong / 100)
     
+def test_setting_outcome_from_other_address():
+    a, amm, usdc, long, short = setup()
+
+    a1 = accounts.add()
+
+    with pytest.raises(Exception) as exc_info:   
+        amm.set_outcome(75, {'from': a1})
+
+def test_high_equal_low_raises_error():
+
+    with pytest.raises(Exception) as exc_info:   
+        setup(high=100, low=100)
+
+def test_high_less_than_low_raises_error():
+
+    with pytest.raises(Exception) as exc_info:   
+        setup(high=100, low=101)
+
+def test_get_payout_before_outcome_set():
+
+    a, amm, usdc, long, short = setup()
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+
+    with pytest.raises(Exception) as exc_info:   
+        amm.get_payout()
+
+def test_get_payout_after_outcome_set():
+
+    a, amm, usdc, long, short = setup(high=100, low=0)
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+    amm.buy(10**18, True, 1)
+
+    amm.set_outcome(50, {'from': a})
+
+    starting_balance = usdc.balanceOf(a.address)
+    starting_long_balance = long.balanceOf(a.address)
+    starting_short_balance = short.balanceOf(a.address)
+    assert starting_short_balance == 0
+
+    amm.execute_payout()
+
+    assert long.balanceOf(a.address) == 0
+    assert short.balanceOf(a.address) == 0
+
+    print(starting_long_balance)
+    print(starting_balance)
+    assert usdc.balanceOf(a.address) == int(Decimal(starting_long_balance) / 2) + starting_balance
+
+def test_get_payout_after_outcome_set_above_high():
+
+    a, amm, usdc, long, short = setup(high=100, low=0)
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+    amm.buy(10**18, True, 1)
+
+    amm.set_outcome(200, {'from': a})
+
+    starting_balance = usdc.balanceOf(a.address)
+    starting_long_balance = long.balanceOf(a.address)
+    starting_short_balance = short.balanceOf(a.address)
+    assert starting_short_balance == 0
+
+    amm.execute_payout()
+
+    assert long.balanceOf(a.address) == 0
+    assert short.balanceOf(a.address) == 0
+
+    print(starting_long_balance)
+    print(starting_balance)
+    assert usdc.balanceOf(a.address) == int(Decimal(starting_long_balance)) * 1 + starting_balance
+
+def test_get_payout_after_outcome_set_below_low():
+
+    a, amm, usdc, long, short = setup(high=100, low=3)
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+    amm.buy(10**18, True, 1)
+
+    amm.set_outcome(2, {'from': a})
+
+    starting_balance = usdc.balanceOf(a.address)
+    starting_long_balance = long.balanceOf(a.address)
+    starting_short_balance = short.balanceOf(a.address)
+    assert starting_short_balance == 0
+
+    amm.execute_payout()
+
+    assert long.balanceOf(a.address) == 0
+    assert short.balanceOf(a.address) == 0
+
+    print(starting_long_balance)
+    print(starting_balance)
+    assert usdc.balanceOf(a.address) == int(Decimal(starting_long_balance)) * 0 + starting_balance
+
+def test_get_payout_after_outcome_set_33():
+
+    a, amm, usdc, long, short = setup(high=100, low=0)
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+    amm.buy(10**18, True, 1)
+
+    amm.set_outcome(33, {'from': a})
+
+    starting_balance = usdc.balanceOf(a.address)
+    starting_long_balance = long.balanceOf(a.address)
+    starting_short_balance = short.balanceOf(a.address)
+    assert starting_short_balance == 0
+
+    print(starting_long_balance)
+    print(starting_balance)
+    print(f"Expected: {int(Decimal(starting_long_balance) * Decimal(33/100)) + starting_balance}")
+    amm.execute_payout()
+
+    assert long.balanceOf(a.address) == 0
+    assert short.balanceOf(a.address) == 0
+
+    assert int(usdc.balanceOf(a.address) / 1000) == int(int(starting_long_balance * Decimal(33/100)) + starting_balance) / 1000
+
+def test_get_payout_after_outcome_short():
+
+    a, amm, usdc, long, short = setup(high=100, low=0)
+
+    usdc.approve(amm.address, 10*10**18, {'from': a})
+    amm.fund(10**18, 5*10**7, {'from': a})
+    amm.buy(11**18, False, 1)
+
+    amm.set_outcome(50, {'from': a})
+
+    starting_balance = usdc.balanceOf(a.address)
+    starting_long_balance = long.balanceOf(a.address)
+    starting_short_balance = short.balanceOf(a.address)
+    assert starting_long_balance == 0
+
+    amm.execute_payout()
+
+    assert long.balanceOf(a.address) == 0
+    assert short.balanceOf(a.address) == 0
+
+    print(starting_long_balance)
+    print(starting_balance)
+    assert usdc.balanceOf(a.address) == int(Decimal(starting_short_balance)) * Decimal(50/100) + starting_balance

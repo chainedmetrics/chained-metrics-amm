@@ -1,14 +1,20 @@
 from brownie import *
 from decimal import Decimal
 
-def setup(usdc_amount=100):
+def setup(usdc_amount=100, usdc_address=None, a=None, high=100, low=50):
 
-    a = accounts.add()
-    usdc = ScalarToken.deploy('USDC', 'USDC', {'from': a})
+    if not a:
+        a = accounts.add()
+
+    if not usdc_address:
+        usdc = ScalarToken.deploy('USDC', 'USDC', {'from': a})
+    else:
+        usdc = Contract.from_abi('USDC', usdc_address, ScalarToken.abi)
+
     usdc.issueTokens(a.address, usdc_amount*10**18, {'from': a.address})
 
     amm = FixedProductMarketMaker.deploy(
-        'NFLX Subs LP Pool', 'NFLX/SUBS/LP', usdc.address, 'NFLX Subs', 'NFLX/SUBS', {'from': a.address}
+        'NFLX Subs LP Pool', 'NFLX/SUBS/LP', usdc.address, 'NFLX Subs', 'NFLX/SUBS', high, low, {'from': a.address}
     )
 
     longToken = Contract.from_abi('LongToken', amm.longTokenAddress(), ScalarToken.abi)
