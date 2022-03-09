@@ -85,7 +85,6 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
 
         if (longBalance > 0){
             uint longPayout = calculate_long_payout(longBalance);
-            console.log(longPayout);
             collateralToken.transfer(msgSender(), longPayout);
             longToken.burnTokens(msgSender(), longBalance);
         }
@@ -102,8 +101,6 @@ contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMa
         uint longTokenValue = outcome.sub(low).mul(10**8).div(high.sub(low));
         uint longPayout = longBalance.mul(longTokenValue).div(10**8);
         
-        console.log("Long Token Value: %s", longTokenValue);
-        console.log("Long Payout:      %s", longPayout);
         return longPayout;
     }
 
