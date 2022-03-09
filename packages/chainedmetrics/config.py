@@ -14,7 +14,8 @@ def setup(usdc_amount=100, usdc_address=None, a=None, high=100, low=50):
     usdc.issueTokens(a.address, usdc_amount*10**18, {'from': a.address})
 
     amm = FixedProductMarketMaker.deploy(
-        'NFLX Subs LP Pool', 'NFLX/SUBS/LP', usdc.address, 'NFLX Subs', 'NFLX/SUBS', high, low, {'from': a.address}
+        'NFLX Subs LP Pool', 'NFLX/SUBS/LP', usdc.address, 
+        'NFLX Subs', 'NFLX/SUBS', high, low, a.address, {'from': a.address}
     )
 
     longToken = Contract.from_abi('LongToken', amm.longTokenAddress(), ScalarToken.abi)
