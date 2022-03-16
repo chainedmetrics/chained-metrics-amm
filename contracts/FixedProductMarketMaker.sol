@@ -49,7 +49,6 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
     constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
         string memory kpiName, string memory kpiSymbol, uint _high, uint _low, address reportingAddress) ERC20(tokenName,  tokenSymbol) public {
 
-        collateralToken = this;
         string memory longName = string(abi.encodePacked(kpiName, " LONG"));
         string memory longSymbol = string(abi.encodePacked(kpiName, "/L"));
         string memory shortName = string(abi.encodePacked(kpiName, " SHORT"));
