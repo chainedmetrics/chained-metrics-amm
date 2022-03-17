@@ -25,7 +25,7 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
     ScalarToken public longToken;
     ScalarToken public shortToken;
 
-    uint public constant FEE = 2*10**16;
+    uint public FEE;
     mapping (address => uint) public earnedFees;
     address[] public stakers;
 
@@ -47,7 +47,7 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
     event Deposit(string msg); 
 
     constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
-        string memory kpiName, string memory kpiSymbol, uint _high, uint _low, address reportingAddress) ERC20(tokenName,  tokenSymbol) public {
+        string memory kpiName, string memory kpiSymbol, uint _high, uint _low, address reportingAddress, uint fee) ERC20(tokenName,  tokenSymbol) public {
 
         string memory longName = string(abi.encodePacked(kpiName, " LONG"));
         string memory longSymbol = string(abi.encodePacked(kpiName, "/L"));
@@ -58,6 +58,7 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
         shortToken = new ScalarToken(shortName, shortSymbol);
         collateralToken = ERC20(collateralTokenAddress);
 
+        FEE = fee;
         require(_high > _low, "high must be greater than low");
         high = _high;
         low = _low;
