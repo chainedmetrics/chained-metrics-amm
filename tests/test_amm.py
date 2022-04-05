@@ -79,7 +79,7 @@ def test_70_target():
     
     funding_amount = short.balanceOf(amm) + int(10**19*.98)
 
-    amm.buy(10**19, True, 1)
+    amm.buy(10**19, True, 1, {'from': a})
 
     expectedAmmount = calculate_token_returned(amm.K(), funding_amount)
     balancingAmount = short.balanceOf(a.address) + int(10**19*.98)
@@ -104,13 +104,13 @@ def test_many_orders():
         print(f"investmentAmountMinusFee:  {int(Decimal(multiple * 10 ** 18) * Decimal(.98))}")
         print(f"k:                         {amm.K()}")
         print(f"fundingToken.balanceOfThis {funding_amount}")
-        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1)
+        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1, {'from': a})
 
         
         expectedAmmount = calculate_token_returned(Decimal(amm.K()), Decimal(funding_amount))
         assert long.balanceOf(amm.address) == expectedAmmount
-        amm.buy(4**18, False, 1)
-        amm.buy(2**18, False, 1)
+        amm.buy(4**18, False, 1, {'from': a})
+        amm.buy(2**18, False, 1, {'from': a})
 
 def test_many_large_orders():
     a, amm, usdc, long, short = setup(10000000)
@@ -120,13 +120,13 @@ def test_many_large_orders():
     multiple = 219082.14159265
     for _ in range(20):
         funding_amount = Decimal(short.balanceOf(amm)) + int(Decimal(multiple * 10 ** 18 / 100)) * 98
-        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1)
+        amm.buy(int(Decimal(multiple * 10 ** 18)), True, 1, {'from': a})
 
         
         expectedAmmount = calculate_token_returned(Decimal(amm.K()), Decimal(funding_amount))
         assert long.balanceOf(amm.address) == expectedAmmount
-        amm.buy(4**18, False, 1)
-        amm.buy(2**18, False, 1)
+        amm.buy(4**18, False, 1, {'from': a})
+        amm.buy(2**18, False, 1, {'from': a})
 
 def test_funding_token_is_collateralized():
     a, amm, usdc, long, short = setup()
@@ -137,7 +137,7 @@ def test_funding_token_is_collateralized():
     assert short.balanceOf(amm.address) == 10**19
     funding_amount = short.balanceOf(amm) + int(10**19*.98)
 
-    amm.buy(10**19, True, 1)
+    amm.buy(10**19, True, 1, {'from': a})
 
     assert short.balanceOf(amm.address) == funding_amount
 
@@ -151,8 +151,8 @@ def test_sell_order():
     
     funding_amount = short.balanceOf(amm) + int(10**19*.98)
 
-    amm.buy(10**19, True, 1)
-    amm.sell(long.balanceOf(a.address), True, 1)
+    amm.buy(10**19, True, 1, {'from': a})
+    amm.sell(long.balanceOf(a.address), True, 1, {'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert amm.calculateCurrentProbability(long.balanceOf(amm.address), short.balanceOf(amm.address)) == 5*10**7
@@ -233,7 +233,7 @@ def test_get_payout_after_outcome_set():
 
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
-    amm.buy(10**18, True, 1)
+    amm.buy(10**18, True, 1, {'from': a})
 
     amm.set_outcome(50, {'from': a})
 
@@ -242,7 +242,7 @@ def test_get_payout_after_outcome_set():
     starting_short_balance = short.balanceOf(a.address)
     assert starting_short_balance == 0
 
-    amm.execute_payout()
+    amm.execute_payout({'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert short.balanceOf(a.address) == 0
@@ -257,7 +257,7 @@ def test_get_payout_after_outcome_set_above_high():
 
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
-    amm.buy(10**18, True, 1)
+    amm.buy(10**18, True, 1, {'from': a})
 
     amm.set_outcome(200, {'from': a})
 
@@ -266,7 +266,7 @@ def test_get_payout_after_outcome_set_above_high():
     starting_short_balance = short.balanceOf(a.address)
     assert starting_short_balance == 0
 
-    amm.execute_payout()
+    amm.execute_payout({'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert short.balanceOf(a.address) == 0
@@ -281,7 +281,7 @@ def test_get_payout_after_outcome_set_below_low():
 
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
-    amm.buy(10**18, True, 1)
+    amm.buy(10**18, True, 1, {'from': a})
 
     amm.set_outcome(2, {'from': a})
 
@@ -290,7 +290,7 @@ def test_get_payout_after_outcome_set_below_low():
     starting_short_balance = short.balanceOf(a.address)
     assert starting_short_balance == 0
 
-    amm.execute_payout()
+    amm.execute_payout({'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert short.balanceOf(a.address) == 0
@@ -305,7 +305,7 @@ def test_get_payout_after_outcome_set_33():
 
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
-    amm.buy(10**18, True, 1)
+    amm.buy(10**18, True, 1, {'from': a})
 
     amm.set_outcome(33, {'from': a})
 
@@ -317,7 +317,7 @@ def test_get_payout_after_outcome_set_33():
     print(starting_long_balance)
     print(starting_balance)
     print(f"Expected: {int(Decimal(starting_long_balance) * Decimal(33/100)) + starting_balance}")
-    amm.execute_payout()
+    amm.execute_payout({'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert short.balanceOf(a.address) == 0
@@ -330,7 +330,7 @@ def test_get_payout_after_outcome_short():
 
     usdc.approve(amm.address, 10*10**18, {'from': a})
     amm.fund(10**18, 5*10**7, {'from': a})
-    amm.buy(11**18, False, 1)
+    amm.buy(11**18, False, 1, {'from': a})
 
     amm.set_outcome(50, {'from': a})
 
@@ -339,7 +339,7 @@ def test_get_payout_after_outcome_short():
     starting_short_balance = short.balanceOf(a.address)
     assert starting_long_balance == 0
 
-    amm.execute_payout()
+    amm.execute_payout({'from': a})
 
     assert long.balanceOf(a.address) == 0
     assert short.balanceOf(a.address) == 0

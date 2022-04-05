@@ -1,27 +1,39 @@
 
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.6.6;
+pragma experimental ABIEncoderV2;
 
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ScalarToken} from "./ScalarToken.sol";
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import  "@openzeppelin/contracts/access/AccessControl.sol";
+import {ERC20Upgradeable} from "@openzeppelin-upgradable/contracts/token/ERC20/ERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin-upgradable/contracts/proxy/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-upgradable/contracts/access/AccessControlUpgradeable.sol";
+import {SafeMathUpgradeable} from "@openzeppelin-upgradable/contracts/math/SafeMathUpgradeable.sol";
 import {EIP712MetaTransaction} from "./EIP712MetaTransaction.sol";
+import {ScalarToken} from "./ScalarToken.sol";
 import {Math} from "./Math.sol";
 
 // For debugging import hardhat for debugging with console.log("Msg");
 // import "hardhat/console.sol";
 
+// Struct with all infor needed to create a new KPI market
+struct KPIReferenceData {
+    address longAddress;
+    address shortAddress;
+    address collateralAddress;
+    address reportingAddress;
+    uint high;
+    uint low;
+    uint fee;
+}
 
-contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction('FixedProductMarketMaker', "1") {
-    using SafeMath for uint;
-    using SafeMath for int;
+contract FixedProductMarketMaker is Initializable, ERC20Upgradeable, AccessControlUpgradeable, EIP712MetaTransaction('FPAMM', "1")  {
+    using SafeMathUpgradeable for uint;
 
     // REPORTING_ROLE allows an address to report on the outcome of a market
     bytes32 public constant REPORTING_ROLE = keccak256("REPORTING_ROLE");
     
     // Tokens used for collateral and long/short pair for the market
-    ERC20 public collateralToken;
+    IERC20 public collateralToken;
     ScalarToken public longToken;
     ScalarToken public shortToken;
 
@@ -29,13 +41,13 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
     mapping (address => uint) public earnedFees;
     address[] public stakers;
 
-    uint public feePool = 0;
+    uint public feePool;
 
     // Variables used for managing the payout
     uint public high;
     uint public low;
     uint public outcome;
-    bool public outcomeSet = false;
+    bool public outcomeSet;
 
     // Constants used in various calculations
     uint constant ONE = 10**18;
@@ -46,24 +58,22 @@ contract FixedProductMarketMaker is ERC20, AccessControl, EIP712MetaTransaction(
     
     event Deposit(string msg); 
 
-    constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
-        string memory kpiName, string memory kpiSymbol, uint _high, uint _low, address reportingAddress, uint fee) ERC20(tokenName,  tokenSymbol) public {
+    constructor () public{}
 
-        string memory longName = string(abi.encodePacked(kpiName, " LONG"));
-        string memory longSymbol = string(abi.encodePacked(kpiName, "/L"));
-        string memory shortName = string(abi.encodePacked(kpiName, " SHORT"));
-        string memory shortSymbol = string(abi.encodePacked(kpiName, "/S"));
+    function initialize(KPIReferenceData memory kpiData) public {
 
-        longToken = new ScalarToken(longName, longSymbol);
-        shortToken = new ScalarToken(shortName, shortSymbol);
-        collateralToken = ERC20(collateralTokenAddress);
+        longToken = ScalarToken(kpiData.longAddress);
+        shortToken = ScalarToken(kpiData.shortAddress);
+        collateralToken = IERC20(kpiData.collateralAddress);
 
-        FEE = fee;
-        require(_high > _low, "high must be greater than low");
-        high = _high;
-        low = _low;
 
-        _setupRole(REPORTING_ROLE, reportingAddress);
+        require(kpiData.high > kpiData.low, "high must be greater than low");
+        high = kpiData.high;
+        low = kpiData.low;
+
+        FEE = kpiData.fee;
+
+        _setupRole(REPORTING_ROLE, kpiData.reportingAddress);
     }
 
     function set_outcome(uint _outcome) public {
