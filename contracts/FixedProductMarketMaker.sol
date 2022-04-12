@@ -1,53 +1,130 @@
 
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.6.6;
+pragma experimental ABIEncoderV2;
 
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ScalarToken} from "./ScalarToken.sol";
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
+import {ERC20Upgradeable} from "@openzeppelin-upgradable/contracts/token/ERC20/ERC20Upgradeable.sol";
+import {IERC20} from "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Initializable} from "@openzeppelin-upgradable/contracts/proxy/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin-upgradable/contracts/access/AccessControlUpgradeable.sol";
+import {SafeMathUpgradeable} from "@openzeppelin-upgradable/contracts/math/SafeMathUpgradeable.sol";
 import {EIP712MetaTransaction} from "./EIP712MetaTransaction.sol";
+import {ScalarToken} from "./ScalarToken.sol";
 import {Math} from "./Math.sol";
 
 // For debugging import hardhat for debugging with console.log("Msg");
 // import "hardhat/console.sol";
 
+// Struct with all infor needed to create a new KPI market
+struct KPIReferenceData {
+    address longAddress;
+    address shortAddress;
+    address collateralAddress;
+    address reportingAddress;
+    uint high;
+    uint low;
+    uint fee;
+}
 
-contract FixedProductMarketMaker is ERC20, EIP712MetaTransaction('FixedProductMarketMaker', "1") {
-    using SafeMath for uint;
-    using SafeMath for int;
+contract FixedProductMarketMaker is Initializable, ERC20Upgradeable, AccessControlUpgradeable, EIP712MetaTransaction('FPAMM', "1")  {
+    using SafeMathUpgradeable for uint;
 
-    ERC20 public collateralToken;
+    // REPORTING_ROLE allows an address to report on the outcome of a market
+    bytes32 public constant REPORTING_ROLE = keccak256("REPORTING_ROLE");
+    
+    // Tokens used for collateral and long/short pair for the market
+    IERC20 public collateralToken;
     ScalarToken public longToken;
     ScalarToken public shortToken;
 
-    uint public constant FEE = 2*10**16;
+    uint public FEE;
     mapping (address => uint) public earnedFees;
     address[] public stakers;
-    uint constant ONE = 10**18;
-    uint constant TARGET_PRICE_DIGITS = 10**8;
-    uint constant FIFTY_FIFTY = 5*10**7;
-    uint public feePool = 0;
 
-    // Used for quadratic equation and need to be cast to uints
+    uint public feePool;
+
+    // Variables used for managing the payout
+    uint public high;
+    uint public low;
+    uint public outcome;
+    bool public outcomeSet;
+
+    // Constants used in various calculations
+    uint constant ONE = 10**18;
+    uint constant TARGET_PRICE_DIGITS = 10**8; // Payouts and initial AMM price go to 8 digits
+    uint constant FIFTY_FIFTY = 5*10**7; // 50/50 if using 8 digits of precision
     uint constant UINT_2 = 2;
     uint constant UINT_4 = 4;
     
     event Deposit(string msg); 
 
-    constructor(string memory tokenName, string memory tokenSymbol, address collateralTokenAddress,
-        string memory kpiName, string memory kpiSymbol) ERC20(tokenName,  tokenSymbol) public {
+    constructor () public{}
 
-        collateralToken = this;
-        string memory longName = string(abi.encodePacked(kpiName, " LONG"));
-        string memory longSymbol = string(abi.encodePacked(kpiName, "/L"));
-        string memory shortName = string(abi.encodePacked(kpiName, " SHORT"));
-        string memory shortSymbol = string(abi.encodePacked(kpiName, "/S"));
+    function initialize(KPIReferenceData memory kpiData) public {
 
-        longToken = new ScalarToken(longName, longSymbol);
-        shortToken = new ScalarToken(shortName, shortSymbol);
+        longToken = ScalarToken(kpiData.longAddress);
+        shortToken = ScalarToken(kpiData.shortAddress);
+        collateralToken = IERC20(kpiData.collateralAddress);
 
-        collateralToken = ERC20(collateralTokenAddress);
 
+        require(kpiData.high > kpiData.low, "high must be greater than low");
+        high = kpiData.high;
+        low = kpiData.low;
+
+        FEE = kpiData.fee;
+
+        _setupRole(REPORTING_ROLE, kpiData.reportingAddress);
+    }
+
+    function set_outcome(uint _outcome) public {
+        // Called by the creator to set the outcome of the market
+        require(hasRole(REPORTING_ROLE, msgSender()), "Address does not have REPORTING_ROLE");
+        
+        if (_outcome <= low){
+            outcome = low;
+        } else if (_outcome >= high){
+            outcome = high;
+        } else {
+            outcome = _outcome;
+        }
+
+        outcomeSet = true;
+    }
+
+    function execute_payout() public {
+        // Called by the holder of a token to execute their payout
+        require(outcomeSet,  "Outcome has not been set");
+
+        uint longBalance = longToken.balanceOf(msgSender());
+        uint shortBalance = shortToken.balanceOf(msgSender());
+
+        if (longBalance > 0){
+            uint longPayout = calculate_long_payout(longBalance);
+            collateralToken.transfer(msgSender(), longPayout);
+            longToken.burnTokens(msgSender(), longBalance);
+        }
+
+        if (shortBalance > 0){
+            uint shortPayout = calculate_short_payout(shortBalance);
+            collateralToken.transfer(msgSender(), shortPayout);
+            shortToken.burnTokens(msgSender(), shortBalance);
+        }
+    }
+
+    function calculate_long_payout(uint longBalance) internal returns (uint longPayout) {
+        // Calculates long payout using 8 decimals for the short token value
+        uint longTokenValue = outcome.sub(low).mul(TARGET_PRICE_DIGITS).div(high.sub(low));
+        uint longPayout = longBalance.mul(longTokenValue).div(TARGET_PRICE_DIGITS);
+        
+        return longPayout;
+    }
+
+    function calculate_short_payout(uint shortBalance) internal returns (uint shortPayout) {
+        // Calculates short payout using 8 decimals for the short token value
+        uint shortTokenValue = high.sub(outcome).mul(TARGET_PRICE_DIGITS).div(high.sub(low));
+        uint shortPayout = shortBalance.mul(shortTokenValue).div(TARGET_PRICE_DIGITS);
+
+        return shortPayout;
     }
 
     function fund(uint fundingAmount, uint targetLongPrice) public{
